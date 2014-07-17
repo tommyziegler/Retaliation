@@ -288,15 +288,15 @@ def read_url(url):
     return urllib2.urlopen(request).read()
 
 
-def jenkins_get_responsible_user(job_name):
+def jenkins_get_responsible_user(job_url):
     # Call back to Jenkins and determin who broke the build. (Hacky)
     # We do this by crudly parsing the changes on the last failed build
     
-    changes_url = JENKINS_SERVER + "/job/" + job_name + "/lastFailedBuild/changes"
+    changes_url = JENKINS_SERVER + "/" + job_url + "lastFailedBuild/changes"
     changedata = read_url(changes_url)
 
     # Look for the /user/[name] link
-    m = re.compile('/user/([^/"]+)').search(changedata)
+    m = re.compile('by <a href="/jenkins/user/([^/"]+)').search(changedata)
     if m:
         return m.group(1)
     else:
@@ -315,10 +315,12 @@ def jenkins_wait_for_event():
         data, addr = sock.recvfrom(8 * 1024)
         try:
             notification_data = json.loads(data)
-            status = notification_data["build"]["status"].upper()
-            phase  = notification_data["build"]["phase"].upper()
-            if phase == "FINISHED" and status.startswith("FAIL"):
-                target = jenkins_get_responsible_user(notification_data["name"])
+            status  = notification_data["build"]["status"].upper()
+            phase   = notification_data["build"]["phase"].upper()
+            jobname = notification_data["name"]
+            
+            if ( (phase == "FINISHED" or phase == "FINALIZED") and status.startswith("FAIL") ):
+                target = jenkins_get_responsible_user(notification_data["url"])
                 if target == None:
                     print "WARNING: Could not identify the user who broke the build!"
                     continue
